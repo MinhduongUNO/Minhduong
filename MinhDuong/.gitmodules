@@ -1,0 +1,6 @@
+[submodule "Python_Scraping_Analysis"]
+	path = Python_Scraping_Analysis
+	url = https://github.com/Minhduong243/Minhduong
+[submodule "Text_Analysis"]
+	path = Text_Analysis
+	url = https://github.com/Minhduong243/Minhduong

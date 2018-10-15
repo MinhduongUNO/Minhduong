@@ -1,0 +1,119 @@
+---
+title: "Stats_Final_Project"
+author: "Minh Duong"
+date: "11/24/2017"
+output: pdf_document
+---
+
+The research question is whether GMAT score from 2012 to 2016 differs from state to state among the chosen four in the Midwest: Nebraska, Kansas, Iowa and South Dakota.
+
+The null hypothesis is that: u1 = u2 = u2 = u4
+The alternative hypothesis is that there is at least one state who has the mean GMAT score significantly different from the other three
+
+Because the p-value is less than 0.05, we reject the null hypothesis. Now we look at if age, state and the interaction of the two independent variables affect GMAT score
+
+```{r}
+library(ggmap)
+library(Rcpp)
+library(ggplot2)
+library(ggrepel)
+library(maps)
+library(sp)
+library(rgdal)
+library(raster)
+library(mapdata)
+library(rworldmap)
+library(reshape2)
+library(plyr)
+library(dplyr)
+setwd("/Users/camapcon/Box Sync/Advanced Stats/Final Project")
+library(reshape2)
+library(agricolae)
+
+gmat <- read.csv("ANOVA_GMATScore.csv")
+gmat_melt = melt(gmat, measure.vars= c(1,2,3,4), variable.name = "State", na.rm = TRUE ) 
+gmat_lm = lm(value ~ State, gmat_melt)
+plot(gmat_melt$State, gmat_melt$value)
+abline(lm(value ~ State, data=gmat_melt))
+
+gmat_aov = aov(value ~ State, gmat_melt) 
+(rd_anova = anova(gmat_aov))
+
+(LSD.test(gmat_aov, "State", DFerror = rd_anova$Df[2], 
+          MSerror = rd_anova$`Mean Sq`[2], group = FALSE))
+
+factorial_design = read.csv("FactorialANOVA_GMATScore.csv")
+gmat_age_lm = lm(Score ~ State, factorial_design)
+summary(gmat_age_lm)
+factorial_design$forecast = gmat_age_lm$fitted.values
+
+(st_residuals = rstandard(gmat_age_lm))
+plot(factorial_design$forecast, st_residuals, 
+     main="Standardized Residual Plot", 
+     ylab = "Standardized Residuals", xlab = "Predicted Score") + 
+  grid()
+
+#residuals and standardized residuals
+plot(gmat_melt$value, gmat_lm$residuals, xlab = "value", ylab = "residuals") + grid()
+(std_residuals = rstandard(gmat_lm))
+plot(gmat_melt$value, std_residuals, xlab = "Score", ylab = "Standardized Residuals") + grid()
+# are there outliers and/or high leverage points?
+
+gmat_without_influential = lm(value ~ State, data = gmat_melt[gmat_melt$value < 500,])
+summary(gmat_without_influential) # note the increase in R2 here!
+```
+
+Singapore's International Arrivals - Category
+```{r}
+library(forecast)
+library(TTR)
+library(car)
+arrivals <- read.csv("Singapore_International_Arrivals.csv")
+arrivals_ts = ts(arrivals$Arrivals, frequency = 12, start = 2012)
+plot(arrivals_ts)
+#df <- data.frame(Period = factor(arrivals$Period),
+ #                Month = factor(arrivals$Month),
+  #               Arrivals = factor(arrivals$Arrivals))
+#arrivals_ts = ts(df$Arrivals, frequency = 12, start = 2013)
+#plot(arrivals_ts)
+
+arrivals$Month = relevel(arrivals$Month, ref = "January")
+lm_arrivals = lm(Arrivals ~ Period + factor(Month), data = arrivals)
+summary(lm_arrivals)
+```
+
+Multiplicative Method
+```{r}
+arrivals_ts = ts(arrivals$Arrivals, frequency = 12)
+(centered_moving_average = ma(arrivals_ts, order = 12)) 
+centered_data = data.frame(Period = arrivals$Period, cma = centered_moving_average)
+
+(arrivals_decomposition = decompose(arrivals_ts, type = "multiplicative"))
+(arrivals$SI = arrivals_decomposition$seasonal)
+
+(arrivals$deseasonalized = seasadj(arrivals_decomposition))
+arrivals_deseasonalized_regression = lm(deseasonalized ~ Period, data = arrivals)
+summary(arrivals_deseasonalized_regression)
+
+plot(arrivals$Period, arrivals_deseasonalized_regression$residuals, xlab = "Period", ylab = "Residuals") + grid()
+
+(std_residuals = rstandard(arrivals_deseasonalized_regression))
+plot(arrivals$Period, std_residuals, xlab = "Period", ylab = "Standardized Residuals") + grid()
+outlierTest(arrivals_deseasonalized_regression)
+
+influencePlot(arrivals_deseasonalized_regression,	id.method="noteworthy", 
+              main="Influence Plot")
+
+(arrivals$adjusted_prediction = arrivals_deseasonalized_regression$fitted.values * arrivals$SI) 
+(MSE_multiplicative = (sum((arrivals$adjusted_prediction - arrivals$Arrivals)^2))/48)
+(MAPE_multiplicative = (sum((abs(arrivals$adjusted_prediction - arrivals$Arrivals))/arrivals$Arrivals)))/48
+```
+
+```{r}
+library(lmtest)
+(dwtest(Arrivals ~ Period + factor(Month),
+        alternative = "two.sided",
+        data = arrivals))
+#(durbinWatsonTest = (Arrivals ~ Period + factor(Month),
+#        data = arrivals))
+```
